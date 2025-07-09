@@ -329,7 +329,62 @@ function Minimap({ pokemons, onSelect }) {
     );
 }
 
-// --- App Entry Point ---
+// --- App Component ---
+function App() {
+    const { gameStatus, refreshGeo } = useGame();
+    if (gameStatus === 'initializing') {
+        return (
+            <div className="loading-screen">
+                <h1>Loading...</h1>
+                <p>Initializing the game...</p>
+            </div>
+        );
+    }
+    if (gameStatus === 'locating') {
+        return (
+            <div className="loading-screen">
+                <h1>Locating...</h1>
+                <p>Waiting for geolocation...</p>
+            </div>
+        );
+    }
+    if (gameStatus === 'needs_permission') {
+        return (
+            <div className="permission-screen">
+                <h1>Permission Required</h1>
+                <p>We need location permission to play.</p>
+                <button onClick={refreshGeo}>Grant Permission</button>
+            </div>
+        );
+    }
+    if (gameStatus === 'error') {
+        return (
+            <div className="loading-screen">
+                <h1>Error</h1>
+                <p>Unable to start the game. Please try again later.</p>
+            </div>
+        );
+    }
+    if (gameStatus === 'generating') {
+        return (
+            <div className="loading-screen">
+                <h1>Building World...</h1>
+                <p>Generating new creatures for your adventure...</p>
+            </div>
+        );
+    }
+    if (gameStatus === 'ready') {
+        return (
+            <div className="app-container">
+                <ARView />
+                <UIOverlay />
+            </div>
+        );
+    }
+    return null;
+}
+
+// --- App Entry Point (unchanged) ---
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
     <GameProvider>
