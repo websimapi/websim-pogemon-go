@@ -1,0 +1,181 @@
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: #f0f0f0;
+    color: #333;
+    overscroll-behavior: none;
+}
+
+#root {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.app-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    background: #000;
+}
+
+.ar-scene {
+    width: 100%;
+    height: 100%;
+}
+
+.ui-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 15px;
+    box-sizing: border-box;
+}
+
+.ui-overlay > * {
+    pointer-events: auto;
+}
+
+.loading-screen, .permission-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    z-index: 100;
+    padding: 20px;
+}
+
+.loading-screen h1, .permission-screen h1 {
+    font-size: 1.5em;
+    margin-bottom: 10px;
+}
+
+.loading-screen p, .permission-screen p {
+    font-size: 1em;
+    max-width: 80%;
+}
+
+.permission-screen button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    font-size: 1em;
+    border: none;
+    border-radius: 5px;
+    background-color: #4CAF50;
+    color: white;
+    cursor: pointer;
+}
+
+
+.nearby-list {
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 10px;
+    padding: 10px;
+    max-width: 300px;
+    align-self: flex-start;
+}
+
+.nearby-list h2 {
+    margin: 0 0 10px 0;
+    font-size: 1.2em;
+}
+
+.pogemon-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 5px;
+    transition: background-color 0.2s;
+}
+
+.pogemon-item:hover {
+    background-color: #e0e0e0;
+}
+
+.pogemon-item:last-child {
+    margin-bottom: 0;
+}
+
+.pogemon-item img {
+    width: 50px;
+    height: 50px;
+    margin-right: 10px;
+    border-radius: 5px;
+    background: #eee;
+    object-fit: contain;
+}
+
+.pogemon-info h3 {
+    margin: 0;
+    font-size: 1em;
+}
+
+.pogemon-info p {
+    margin: 0;
+    font-size: 0.8em;
+    color: #666;
+}
+
+.capture-view {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 50;
+    background: transparent;
+}
+
+.back-button {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.5);
+    color: white;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 50px;
+    font-size: 16px;
+    cursor: pointer;
+    z-index: 51;
+}
+
+.pogemon-name-plate {
+    position: absolute;
+    bottom: 20%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    padding: 8px 15px;
+    border-radius: 20px;
+    text-align: center;
+}
+
+.pogemon-name-plate h2 {
+    margin: 0;
+    font-size: 1.2rem;
+}
+.pogemon-name-plate p {
+    margin: 4px 0 0;
+    font-size: 0.9rem;
+    opacity: 0.8;
+}
+
