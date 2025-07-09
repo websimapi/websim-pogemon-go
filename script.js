@@ -197,45 +197,22 @@ function GameProvider({ children }) {
 
 // --- UI Components ---
 
-function App() {
-    const { gameStatus, refreshGeo } = useGame();
-
-    if (gameStatus === 'initializing' || gameStatus === 'locating') {
-        return <div className="loading-screen"><h1>Starting up...</h1><p>Finding your location and nearby Pogemon.</p></div>;
-    }
-    if (gameStatus === 'generating') {
-        return <div className="loading-screen"><h1>Generating World...</h1><p>Creating new Pogemon for you to discover!</p></div>;
-    }
-    if (gameStatus === 'needs_permission') {
-        return (
-            <div className="permission-screen">
-                <h1>Location Access Required</h1>
-                <p>We need your location to show you nearby Pogemon. Please grant permission and click refresh.</p>
-                <button onClick={() => window.location.reload()}>Refresh</button>
-            </div>
-        );
-    }
-    if (gameStatus === 'error') {
-        return <div className="loading-screen"><h1>Error</h1><p>Could not get location. This app requires GPS access.</p></div>;
-    }
-
-    return (
-        <div className="app-container">
-            <ARView />
-            <UIOverlay />
-        </div>
-    );
-}
-
+// Updated UIOverlay: small icon row top-right, and back-button on selection
 function UIOverlay() {
     const { nearbyPokemons, setActivePogemon, activePogemon } = useGame();
     return (
         <div className="ui-overlay">
             <div className="ui-overlay-top">
                 {activePogemon ? (
-                    <button className="back-button" onClick={() => setActivePogemon(null)}>&larr; Back to Map</button>
+                    <button className="back-button" onClick={() => setActivePogemon(null)}>
+                        &larr; Back to Map
+                    </button>
                 ) : (
-                    <NearbyList pokemons={nearbyPokemons} onSelect={setActivePogemon} />
+                    <>
+                        {/* placeholder to push icons to right */}
+                        <div style={{ width: '1px' }} />
+                        <NearbyIcons pokemons={nearbyPokemons} onSelect={setActivePogemon} />
+                    </>
                 )}
             </div>
             <div className="ui-overlay-bottom">
@@ -252,20 +229,39 @@ function UIOverlay() {
     );
 }
 
+// New component: renders small clickable icons for nearby Pogemon
+function NearbyIcons({ pokemons, onSelect }) {
+    return (
+        <div className="nearby-icons">
+            {pokemons.map(p => (
+                <img
+                    key={p.id}
+                    src={p.imageUrl}
+                    alt={p.name}
+                    className="nearby-icon"
+                    onClick={() => onSelect(p)}
+                />
+            ))}
+        </div>
+    );
+}
+
 function ARView() {
     const { nearbyPokemons, activePogemon } = useGame();
 
     return (
         <a-scene
+            embedded
             vr-mode-ui="enabled: false"
-            arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
-            renderer="antialias: true; alpha: true"
+            arjs="sourceType: webcam; debugUIEnabled: false;"
+            renderer="colorManagement: true; antialias: true; alpha: true; preserveDrawingBuffer: true"
+            background="color: 0x000000; alpha: 0"
             className="ar-scene"
-            key={activePogemon ? 'capture' : 'world'} // Force remount to simplify state
+            key={activePogemon ? 'capture' : 'world'}
         >
             <a-camera gps-new-camera="gpsMinDistance: 5"></a-camera>
             {activePogemon ? (
-                 <a-image
+                <a-image
                     src={activePogemon.imageUrl}
                     scale="2 2 2"
                     position="0 -0.5 -5"
