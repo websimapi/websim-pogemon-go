@@ -241,7 +241,7 @@ function ARSceneWrapper({ nearbyPokemons }) {
             className="ar-scene"
             key={JSON.stringify(nearbyPokemons.map(p => p.id))}
         >
-            <a-camera></a-camera>
+            <a-camera gps-new-camera='gpsMinDistance: 5'></a-camera>
             {nearbyPokemons.map(p => (
                 <a-image
                     key={p.id}
