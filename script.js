@@ -241,7 +241,7 @@ function ARSceneWrapper({ nearbyPokemons }) {
             className="ar-scene"
             key={JSON.stringify(nearbyPokemons.map(p => p.id))}
         >
-            <a-camera gps-new-camera="gpsMinDistance: 5;"></a-camera>
+            <a-camera></a-camera>
             {nearbyPokemons.map(p => (
                 <a-image
                     key={p.id}
@@ -265,7 +265,7 @@ function CaptureView({ pogemon, onBack }) {
                 renderer="antialias: true; alpha: true"
                 className="ar-scene"
             >
-                <a-camera gps-new-camera="gpsMinDistance: 5;"></a-camera>
+                <a-camera></a-camera>
                 <a-image
                     src={pogemon.imageUrl}
                     scale="2 2 2"
