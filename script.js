@@ -97,11 +97,12 @@ function App() {
             const pogemon = available[i];
             const seed = parseInt(pogemon.id.substring(0, 8), 16);
             
-            const randomAngle = seededRandom(seed * 1.1) * 360;
+            const randomAngle = seededRandom(seed * 1.1) * 360; // degrees
             const randomDist = 20 + seededRandom(seed * 2.2) * 80; // 20-100 meters
 
-            const dy = randomDist * Math.cos(randomAngle);
-            const dx = randomDist * Math.sin(randomAngle);
+            const angleRad = randomAngle * Math.PI / 180;
+            const dy = randomDist * Math.cos(angleRad);
+            const dx = randomDist * Math.sin(angleRad);
 
             const newLat = position.latitude + (dy / 111111);
             const newLon = position.longitude + (dx / (111111 * Math.cos(position.latitude * Math.PI / 180)));
@@ -110,7 +111,9 @@ function App() {
                 ...pogemon,
                 lat: newLat,
                 lon: newLon,
-                distance: '...'
+                distance: '...',
+                angle: randomAngle,
+                spawnDistance: randomDist,
             });
         }
         setNearbyPokemons(spawned);
@@ -194,6 +197,7 @@ function App() {
                     <ARSceneWrapper nearbyPokemons={nearbyPokemons} />
                     <div className="ui-overlay">
                         <NearbyList pokemons={nearbyPokemons} onSelect={setActivePogemon} />
+                        <Minimap pokemons={nearbyPokemons} />
                     </div>
                 </>
             )}
@@ -277,6 +281,47 @@ function NearbyList({ pokemons, onSelect }) {
 }
 
 
+function Minimap({ pokemons }) {
+    const MAP_SIZE = 120; // px
+    const MAX_DIST = 100; // meters, from spawn logic
+
+    return (
+        <div className="minimap" style={{ width: MAP_SIZE, height: MAP_SIZE }}>
+            <div className="player-dot"></div>
+            <div className="north-indicator">N</div>
+            {pokemons.map(p => {
+                if (typeof p.angle === 'undefined' || typeof p.spawnDistance === 'undefined') return null;
+
+                const angleRad = p.angle * Math.PI / 180;
+                // use spawnDistance which is consistent, not the live distance
+                const r = (p.spawnDistance / MAX_DIST) * (MAP_SIZE / 2); 
+                
+                // x and y from center, with North being up
+                const x = r * Math.sin(angleRad);
+                const y = -r * Math.cos(angleRad);
+
+                const style = {
+                    position: 'absolute',
+                    top: `calc(50% + ${y}px)`,
+                    left: `calc(50% + ${x}px)`,
+                    transform: 'translate(-50%, -50%)',
+                };
+
+                return (
+                    <img
+                        key={p.id}
+                        src={p.imageUrl}
+                        alt={p.name}
+                        className="pogemon-dot"
+                        style={style}
+                        onClick={() => {/* could maybe center on this pogemon or something */}}
+                    />
+                );
+            })}
+        </div>
+    );
+}
+
+
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(<App />);
-

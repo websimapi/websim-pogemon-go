@@ -33,10 +33,11 @@ body {
     height: 100%;
     pointer-events: none;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     justify-content: space-between;
     padding: 15px;
     box-sizing: border-box;
+    align-items: flex-start;
 }
 
 .ui-overlay > * {
@@ -81,6 +82,49 @@ body {
     cursor: pointer;
 }
 
+.minimap {
+    position: relative;
+    background: rgba(255, 255, 255, 0.8);
+    border: 2px solid rgba(0,0,0,0.2);
+    border-radius: 50%;
+    overflow: hidden;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.player-dot {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 10px;
+    height: 10px;
+    background-color: #007bff;
+    border: 2px solid white;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+}
+
+.north-indicator {
+    position: absolute;
+    top: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    font-weight: bold;
+    color: rgba(0,0,0,0.4);
+    z-index: 1;
+}
+
+.pogemon-dot {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid white;
+    background-color: #ddd;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    object-fit: contain;
+    z-index: 1;
+}
 
 .nearby-list {
     background: rgba(255, 255, 255, 0.9);
@@ -173,9 +217,9 @@ body {
     margin: 0;
     font-size: 1.2rem;
 }
+
 .pogemon-name-plate p {
     margin: 4px 0 0;
     font-size: 0.9rem;
     opacity: 0.8;
 }
-
