@@ -42,8 +42,19 @@ function App() {
         room.collection(POGEMON_COLLECTION).getList
     ) || [];
 
-    const generateNewPogemon = useCallback(async () => {
-        setStatus('generating');
+    // This is to prevent a race condition where we check for pogemon before the first data load.
+    const [isDataLoaded, setIsDataLoaded] = useState(false);
+    useEffect(() => {
+        if (allPogemon.length > 0) {
+            setIsDataLoaded(true);
+        } else {
+             // If after a short delay, allPogemon is still empty, we assume DB is empty or data loaded as empty.
+            const timer = setTimeout(() => setIsDataLoaded(true), 2000);
+            return () => clearTimeout(timer);
+        }
+    }, [allPogemon.length > 0]);
+
+    const generateSinglePogemon = useCallback(async () => {
         try {
             const conceptCompletion = await websim.chat.completions.create({
                 messages: [{
@@ -70,21 +81,38 @@ function App() {
                 imageUrl: imageResult.url,
             });
         } catch (error) {
-            console.error("Failed to generate Pogemon:", error);
-        } finally {
-            setStatus('ready');
+            console.error("Failed to generate a Pogemon:", error);
+            // We can decide if one failure should stop the whole batch. For now, it just logs.
         }
     }, []);
 
     useEffect(() => {
-        if (status === 'ready' && allPogemon.length > 0 && allPogemon.length < MIN_POGEMON_IN_DB) {
+        // This effect runs once when the app is ready and we have certainty about the DB state
+        if (status === 'ready' && isDataLoaded && allPogemon.length < MIN_POGEMON_IN_DB) {
             const needed = MIN_POGEMON_IN_DB - allPogemon.length;
             console.log(`DB is sparse. Generating ${needed} new Pogemon.`);
+            
+            setStatus('generating');
+            
+            const generationPromises = [];
             for (let i = 0; i < needed; i++) {
-                generateNewPogemon();
+                generationPromises.push(generateSinglePogemon());
             }
+
+            Promise.all(generationPromises)
+                .then(() => {
+                    console.log("Finished generating new Pogemon.");
+                })
+                .catch((err) => {
+                    console.error("An error occurred during bulk Pogemon generation:", err);
+                })
+                .finally(() => {
+                     // The subscription to allPogemon will update the list automatically.
+                     // We just need to signal that generation is complete.
+                    setStatus('ready');
+                });
         }
-    }, [status, allPogemon.length, generateNewPogemon]);
+    }, [status, isDataLoaded, allPogemon.length, generateSinglePogemon]);
 
     const spawnNearby = useCallback((position, all) => {
         if (!position || all.length === 0) return;
@@ -137,7 +165,6 @@ function App() {
         }, 2000);
         return () => clearInterval(interval);
     }, [userPosition]);
-
 
     const init = () => {
         if (!navigator.geolocation) {
