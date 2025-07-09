@@ -241,7 +241,7 @@ function ARSceneWrapper({ nearbyPokemons }) {
         <a-scene
             key={sceneKey}
             vr-mode-ui="enabled: false"
-            arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
+            arjs="sourceType: webcam; debugUIEnabled: false;"
             renderer="antialias: true; alpha: true"
             className="ar-scene"
             embedded
@@ -267,19 +267,19 @@ function CaptureView({ pogemon, onBack }) {
             <button className="back-button" onClick={onBack}>&larr; Back to Map</button>
              <a-scene
                 vr-mode-ui="enabled: false"
-                arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
+                arjs="sourceType: webcam; debugUIEnabled: false;"
                 renderer="antialias: true; alpha: true"
                 className="ar-scene"
                 embedded
             >
-                <a-camera static></a-camera>
-                <a-entity
-                    gltf-model={`url(https://assets.websim.com/proxy?url=${encodeURIComponent(pogemon.imageUrl)})`}
+                <a-camera static-camera look-controls="enabled: false" wasd-controls="enabled: false"></a-camera>
+                <a-image
+                    src={pogemon.imageUrl}
                     scale="2 2 2"
-                    position="0 -0.5 -5"
+                    position="0 0 -5"
                     look-at="[camera]"
                     animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear;"
-                ></a-entity>
+                ></a-image>
             </a-scene>
             <div className="pogemon-name-plate">
                 <h2>{pogemon.name}</h2>
