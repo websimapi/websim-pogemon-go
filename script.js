@@ -221,7 +221,7 @@ function App() {
                 <CaptureView pogemon={activePogemon} onBack={() => setActivePogemon(null)} />
             ) : (
                 <>
-                    <ARSceneWrapper nearbyPokemons={nearbyPokemons} key="ar-scene" />
+                    <ARSceneWrapper nearbyPokemons={nearbyPokemons} />
                     <div className="ui-overlay">
                         <NearbyList pokemons={nearbyPokemons} onSelect={setActivePogemon} />
                         <Minimap pokemons={nearbyPokemons} />
@@ -233,20 +233,15 @@ function App() {
 }
 
 function ARSceneWrapper({ nearbyPokemons }) {
-    // By adding a key that changes, we force React to unmount and remount the component,
-    // which helps A-Frame and AR.js re-initialize correctly.
-    const sceneKey = useMemo(() => nearbyPokemons.map(p => p.id).join('-'), [nearbyPokemons]);
-
     return (
         <a-scene
-            key={sceneKey}
             vr-mode-ui="enabled: false"
             arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
             renderer="antialias: true; alpha: true"
             className="ar-scene"
-            embedded
+            key={JSON.stringify(nearbyPokemons.map(p => p.id))}
         >
-            <a-camera gps-new-camera='gpsMinDistance: 5'></a-camera>
+            <a-camera></a-camera>
             {nearbyPokemons.map(p => (
                 <a-image
                     key={p.id}
@@ -261,24 +256,21 @@ function ARSceneWrapper({ nearbyPokemons }) {
 }
 
 function CaptureView({ pogemon, onBack }) {
-    // The key forces a full remount when switching to this view, ensuring AR.js initializes correctly.
     return (
-        <div className="capture-view" key="capture-scene">
+        <div className="capture-view">
             <button className="back-button" onClick={onBack}>&larr; Back to Map</button>
              <a-scene
                 vr-mode-ui="enabled: false"
                 arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
                 renderer="antialias: true; alpha: true"
                 className="ar-scene"
-                embedded
             >
-                <a-camera static-camera look-controls="enabled: false" wasd-controls="enabled: false"></a-camera>
+                <a-camera></a-camera>
                 <a-image
                     src={pogemon.imageUrl}
                     scale="2 2 2"
-                    position="0 0 -5"
+                    position="0 -0.5 -5"
                     look-at="[camera]"
-                    animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear;"
                 ></a-image>
             </a-scene>
             <div className="pogemon-name-plate">
