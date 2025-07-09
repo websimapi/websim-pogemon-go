@@ -35,12 +35,29 @@ function App() {
     const [status, setStatus] = useState('initializing'); // initializing, needs_permission, ready, generating
     const [userPosition, setUserPosition] = useState(null);
     const [nearbyPokemons, setNearbyPokemons] = useState([]);
-    const [activePogemon, setActivePogemon] = useState(null); // The one being viewed in AR
+    const [activePogemonId, setActivePogemonId] = useState(null);
 
     const allPogemon = useSyncExternalStore(
         room.collection(POGEMON_COLLECTION).subscribe,
         room.collection(POGEMON_COLLECTION).getList
     ) || [];
+
+    const activePogemon = useMemo(() => {
+        if (!activePogemonId) return null;
+        // First, check nearby spawned pokemons as they have lat/lon data
+        const fromNearby = nearbyPokemons.find(p => p.id === activePogemonId);
+        if (fromNearby) return fromNearby;
+        // If not in nearby (e.g. page reloaded), find from all pogemon
+        return allPogemon.find(p => p.id === activePogemonId) || null;
+    }, [activePogemonId, allPogemon, nearbyPokemons]);
+
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const pogemonId = urlParams.get('pogemonId');
+        if (pogemonId) {
+            setActivePogemonId(pogemonId);
+        }
+    }, []);
 
     // This is to prevent a race condition where we check for pogemon before the first data load.
     const [isDataLoaded, setIsDataLoaded] = useState(false);
@@ -139,7 +156,7 @@ function App() {
                 ...pogemon,
                 lat: newLat,
                 lon: newLon,
-                distance: '...',
+                distance: calculateDistance(position.latitude, position.longitude, newLat, newLon).toFixed(0),
                 angle: randomAngle,
                 spawnDistance: randomDist,
             });
@@ -148,13 +165,14 @@ function App() {
     }, []);
 
     useEffect(() => {
-        if (status === 'ready' && userPosition && allPogemon.length > 0) {
+        if (status === 'ready' && userPosition && allPogemon.length > 0 && !activePogemonId) {
+            // Only spawn if not in capture view
             spawnNearby(userPosition, allPogemon);
         }
-    }, [status, userPosition, allPogemon, spawnNearby]);
+    }, [status, userPosition, allPogemon, spawnNearby, activePogemonId]);
 
     useEffect(() => {
-        if (!userPosition) return;
+        if (!userPosition || activePogemonId) return; // Don't update distances in capture view
         const interval = setInterval(() => {
             setNearbyPokemons(currentNearby =>
                 currentNearby.map(p => ({
@@ -164,7 +182,7 @@ function App() {
             );
         }, 2000);
         return () => clearInterval(interval);
-    }, [userPosition]);
+    }, [userPosition, activePogemonId]);
 
     const init = () => {
         if (!navigator.geolocation) {
@@ -206,7 +224,7 @@ function App() {
             <div className="permission-screen">
                 <h1>Location Access Required</h1>
                 <p>We need your location to show you nearby Pogemon. Please grant permission and refresh the page.</p>
-                 <button onClick={() => window.location.reload()}>Refresh</button>
+                 <button onClick={() => window.location.reload()}>Reload Page</button>
             </div>
         );
     }
@@ -214,16 +232,30 @@ function App() {
     if (status === 'error' || status === 'unsupported') {
         return <div className="loading-screen"><h1>Error</h1><p>Could not get location. This app requires GPS.</p></div>;
     }
+    
+    const handleSelectPogemon = (pogemon) => {
+        const url = new URL(window.location.href);
+        url.searchParams.set('pogemonId', pogemon.id);
+        window.history.pushState({}, '', url);
+        window.location.reload(); // Reload to cleanly switch to capture view
+    };
+
+    const handleBackToMap = () => {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('pogemonId');
+        window.history.pushState({}, '', url);
+        window.location.reload(); // Reload to cleanly switch back to map view
+    };
 
     return (
         <div className="app-container">
             {activePogemon ? (
-                <CaptureView pogemon={activePogemon} onBack={() => setActivePogemon(null)} />
+                <CaptureView pogemon={activePogemon} onBack={handleBackToMap} />
             ) : (
                 <>
                     <ARSceneWrapper nearbyPokemons={nearbyPokemons} />
                     <div className="ui-overlay">
-                        <NearbyList pokemons={nearbyPokemons} onSelect={setActivePogemon} />
+                        <NearbyList pokemons={nearbyPokemons} onSelect={handleSelectPogemon} />
                         <Minimap pokemons={nearbyPokemons} />
                     </div>
                 </>
@@ -236,12 +268,12 @@ function ARSceneWrapper({ nearbyPokemons }) {
     return (
         <a-scene
             vr-mode-ui="enabled: false"
-            arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
-            renderer="antialias: true; alpha: true"
+            arjs="sourceType: webcam; debugUIEnabled: false;"
+            renderer="antialias: true; alpha: true; physicallyCorrectLights: true;"
             className="ar-scene"
             key={JSON.stringify(nearbyPokemons.map(p => p.id))}
         >
-            <a-camera gps-new-camera='gpsMinDistance: 5'></a-camera>
+            <a-camera gps-new-camera="gpsMinDistance: 5"></a-camera>
             {nearbyPokemons.map(p => (
                 <a-image
                     key={p.id}
@@ -256,21 +288,29 @@ function ARSceneWrapper({ nearbyPokemons }) {
 }
 
 function CaptureView({ pogemon, onBack }) {
+    // This effect ensures that if the pogemon data isn't loaded yet (e.g., on a page reload into capture view),
+    // we show a loading indicator.
+    if (!pogemon.name) {
+        return <div className="loading-screen"><h1>Loading Creature...</h1></div>;
+    }
+
     return (
         <div className="capture-view">
             <button className="back-button" onClick={onBack}>&larr; Back to Map</button>
              <a-scene
+                embedded
                 vr-mode-ui="enabled: false"
-                arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
-                renderer="antialias: true; alpha: true"
+                arjs="sourceType: webcam; debugUIEnabled: false;"
+                renderer="antialias: true; alpha: true; physicallyCorrectLights: true;"
                 className="ar-scene"
             >
-                <a-camera></a-camera>
+                <a-camera gps-new-camera></a-camera>
+                <a-light type="ambient" color="#888"></a-light>
+                <a-light type="directional" intensity="0.5" position="-1 1 1"></a-light>
                 <a-image
                     src={pogemon.imageUrl}
                     scale="2 2 2"
                     position="0 -0.5 -5"
-                    look-at="[camera]"
                 ></a-image>
             </a-scene>
             <div className="pogemon-name-plate">
