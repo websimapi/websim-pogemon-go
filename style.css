@@ -26,17 +26,29 @@ body {
     position: absolute;
     top: 0;
     left: 0;
+    z-index: 0;
 }
 
-/* Ensure the webcam video fills the scene and sits behind AR elements */
+/* Fix camera feed layering: show video behind AR canvas */
+.arjs-video,
 .ar-scene video {
-    position: absolute;
+    position: absolute !important;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
-    z-index: -1;
+    z-index: 0 !important; /* Changed from -1 so the feed is visible */
+}
+
+/* AR canvas on top of the video feed */
+.ar-scene canvas {
+    position: absolute !important;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1 !important;
 }
 
 .ui-overlay {
@@ -51,6 +63,7 @@ body {
     justify-content: space-between;
     padding: 15px;
     box-sizing: border-box;
+    z-index: 2;
 }
 
 .ui-overlay-top, .ui-overlay-bottom {
@@ -63,7 +76,6 @@ body {
 .ui-overlay-bottom {
     align-items: flex-end;
 }
-
 
 .ui-overlay > * {
     pointer-events: auto;
