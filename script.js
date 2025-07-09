@@ -241,7 +241,7 @@ function ARSceneWrapper({ nearbyPokemons }) {
         <a-scene
             key={sceneKey}
             vr-mode-ui="enabled: false"
-            arjs="sourceType: webcam; debugUIEnabled: false;"
+            arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
             renderer="antialias: true; alpha: true"
             className="ar-scene"
             embedded
@@ -267,7 +267,7 @@ function CaptureView({ pogemon, onBack }) {
             <button className="back-button" onClick={onBack}>&larr; Back to Map</button>
              <a-scene
                 vr-mode-ui="enabled: false"
-                arjs="sourceType: webcam; debugUIEnabled: false;"
+                arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
                 renderer="antialias: true; alpha: true"
                 className="ar-scene"
                 embedded
