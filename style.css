@@ -33,12 +33,23 @@ body {
     height: 100%;
     pointer-events: none;
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     justify-content: space-between;
     padding: 15px;
     box-sizing: border-box;
-    align-items: flex-start;
 }
+
+.ui-overlay-top, .ui-overlay-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    width: 100%;
+}
+
+.ui-overlay-bottom {
+    align-items: flex-end;
+}
+
 
 .ui-overlay > * {
     pointer-events: auto;
@@ -124,6 +135,7 @@ body {
     box-shadow: 0 1px 3px rgba(0,0,0,0.3);
     object-fit: contain;
     z-index: 1;
+    cursor: pointer;
 }
 
 .nearby-list {
@@ -177,20 +189,7 @@ body {
     color: #666;
 }
 
-.capture-view {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 50;
-    background: transparent;
-}
-
 .back-button {
-    position: absolute;
-    top: 20px;
-    left: 20px;
     background: rgba(0, 0, 0, 0.5);
     color: white;
     border: none;
@@ -211,6 +210,7 @@ body {
     padding: 8px 15px;
     border-radius: 20px;
     text-align: center;
+    pointer-events: none;
 }
 
 .pogemon-name-plate h2 {
@@ -223,3 +223,4 @@ body {
     font-size: 0.9rem;
     opacity: 0.8;
 }
+

@@ -1,11 +1,16 @@
-const { useState, useEffect, useMemo, useSyncExternalStore, useCallback } = React;
+const { useState, useEffect, useMemo, useSyncExternalStore, useCallback, createContext, useContext } = React;
 
-const POGEMON_COLLECTION = 'pogemon_v1';
+// --- Constants & Config ---
+const POGEMON_COLLECTION = 'pogemon_v2';
 const MIN_POGEMON_IN_DB = 10;
 const NEARBY_COUNT = 3;
+const SPAWN_RADIUS_MIN = 20; // meters
+const SPAWN_RADIUS_MAX = 100; // meters
 
-// Websim setup
+// --- Websim & Context Setup ---
 const room = new WebsimSocket();
+const GameContext = createContext(null);
+const useGame = () => useContext(GameContext);
 
 // --- Helper Functions ---
 function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -29,27 +34,55 @@ function seededRandom(seed) {
     return x - Math.floor(x);
 }
 
-// --- React Components ---
+// --- Custom Hooks ---
 
-function App() {
-    const [status, setStatus] = useState('initializing'); // initializing, needs_permission, ready, generating
-    const [userPosition, setUserPosition] = useState(null);
-    const [nearbyPokemons, setNearbyPokemons] = useState([]);
-    const [activePogemon, setActivePogemon] = useState(null); // The one being viewed in AR
+// Hook for managing Geolocation
+function useGeolocation() {
+    const [status, setStatus] = useState('initializing');
+    const [position, setPosition] = useState(null);
+    const [error, setError] = useState(null);
 
+    const init = useCallback(() => {
+        if (!navigator.geolocation) {
+            setStatus('unsupported');
+            return;
+        }
+        setStatus('locating');
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                setPosition(pos.coords);
+                setStatus('ready');
+            },
+            (err) => {
+                setError(err);
+                setStatus(err.code === 1 ? 'permission_denied' : 'error');
+            },
+            { enableHighAccuracy: true }
+        );
+    }, []);
+
+    useEffect(() => {
+        init();
+    }, [init]);
+    
+    return { status, position, error, refresh: init };
+}
+
+// Hook for managing Pogemon data and generation
+function usePogemonDB() {
+    const [isGenerating, setIsGenerating] = useState(false);
+    
     const allPogemon = useSyncExternalStore(
         room.collection(POGEMON_COLLECTION).subscribe,
         room.collection(POGEMON_COLLECTION).getList
     ) || [];
 
-    // This is to prevent a race condition where we check for pogemon before the first data load.
-    const [isDataLoaded, setIsDataLoaded] = useState(false);
+    const [isInitialLoadDone, setIsInitialLoadDone] = useState(false);
     useEffect(() => {
         if (allPogemon.length > 0) {
-            setIsDataLoaded(true);
+            setIsInitialLoadDone(true);
         } else {
-             // If after a short delay, allPogemon is still empty, we assume DB is empty or data loaded as empty.
-            const timer = setTimeout(() => setIsDataLoaded(true), 2000);
+            const timer = setTimeout(() => setIsInitialLoadDone(true), 2500);
             return () => clearTimeout(timer);
         }
     }, [allPogemon.length > 0]);
@@ -82,214 +115,180 @@ function App() {
             });
         } catch (error) {
             console.error("Failed to generate a Pogemon:", error);
-            // We can decide if one failure should stop the whole batch. For now, it just logs.
         }
     }, []);
 
     useEffect(() => {
-        // This effect runs once when the app is ready and we have certainty about the DB state
-        if (status === 'ready' && isDataLoaded && allPogemon.length < MIN_POGEMON_IN_DB) {
+        if (isInitialLoadDone && allPogemon.length < MIN_POGEMON_IN_DB && !isGenerating) {
             const needed = MIN_POGEMON_IN_DB - allPogemon.length;
             console.log(`DB is sparse. Generating ${needed} new Pogemon.`);
+            setIsGenerating(true);
             
-            setStatus('generating');
-            
-            const generationPromises = [];
-            for (let i = 0; i < needed; i++) {
-                generationPromises.push(generateSinglePogemon());
-            }
+            const generationPromises = Array.from({ length: needed }, () => generateSinglePogemon());
 
             Promise.all(generationPromises)
-                .then(() => {
-                    console.log("Finished generating new Pogemon.");
-                })
-                .catch((err) => {
-                    console.error("An error occurred during bulk Pogemon generation:", err);
-                })
-                .finally(() => {
-                     // The subscription to allPogemon will update the list automatically.
-                     // We just need to signal that generation is complete.
-                    setStatus('ready');
-                });
+                .catch((err) => console.error("An error occurred during bulk Pogemon generation:", err))
+                .finally(() => setIsGenerating(false));
         }
-    }, [status, isDataLoaded, allPogemon.length, generateSinglePogemon]);
+    }, [isInitialLoadDone, allPogemon.length, isGenerating, generateSinglePogemon]);
 
-    const spawnNearby = useCallback((position, all) => {
-        if (!position || all.length === 0) return;
+    return { allPogemon, isGenerating, isDBReady: isInitialLoadDone };
+}
+
+// --- Main Game Provider ---
+function GameProvider({ children }) {
+    const { status: geoStatus, position: userPosition, refresh: refreshGeo } = useGeolocation();
+    const { allPogemon, isGenerating, isDBReady } = usePogemonDB();
+    
+    const [nearbyPokemons, setNearbyPokemons] = useState([]);
+    const [activePogemon, setActivePogemon] = useState(null);
+
+    const gameStatus = useMemo(() => {
+        if (geoStatus === 'initializing' || !isDBReady) return 'initializing';
+        if (isGenerating) return 'generating';
+        if (geoStatus === 'locating') return 'locating';
+        if (geoStatus === 'permission_denied') return 'needs_permission';
+        if (geoStatus === 'error' || geoStatus === 'unsupported') return 'error';
+        return 'ready';
+    }, [geoStatus, isDBReady, isGenerating]);
+
+    // Spawning logic
+    useEffect(() => {
+        if (!userPosition || allPogemon.length === 0) return;
         
-        console.log("Spawning new nearby Pogemon...");
         const spawned = [];
-        const available = [...all].sort((a,b) => b.created_at.localeCompare(a.created_at)); // Newest first
+        const available = [...allPogemon].sort((a,b) => b.created_at.localeCompare(a.created_at));
 
         for (let i = 0; i < Math.min(NEARBY_COUNT, available.length); i++) {
             const pogemon = available[i];
             const seed = parseInt(pogemon.id.substring(0, 8), 16);
             
-            const randomAngle = seededRandom(seed * 1.1) * 360; // degrees
-            const randomDist = 20 + seededRandom(seed * 2.2) * 80; // 20-100 meters
+            const angle = seededRandom(seed * 1.1) * 360;
+            const dist = SPAWN_RADIUS_MIN + seededRandom(seed * 2.2) * (SPAWN_RADIUS_MAX - SPAWN_RADIUS_MIN);
 
-            const angleRad = randomAngle * Math.PI / 180;
-            const dy = randomDist * Math.cos(angleRad);
-            const dx = randomDist * Math.sin(angleRad);
+            const angleRad = angle * Math.PI / 180;
+            const dy = dist * Math.cos(angleRad);
+            const dx = dist * Math.sin(angleRad);
 
-            const newLat = position.latitude + (dy / 111111);
-            const newLon = position.longitude + (dx / (111111 * Math.cos(position.latitude * Math.PI / 180)));
+            const lat = userPosition.latitude + (dy / 111111);
+            const lon = userPosition.longitude + (dx / (111111 * Math.cos(userPosition.latitude * Math.PI / 180)));
             
-            spawned.push({
-                ...pogemon,
-                lat: newLat,
-                lon: newLon,
-                distance: '...',
-                angle: randomAngle,
-                spawnDistance: randomDist,
-            });
+            spawned.push({ ...pogemon, lat, lon, spawn: { angle, distance: dist } });
         }
         setNearbyPokemons(spawned);
-    }, []);
-
-    useEffect(() => {
-        if (status === 'ready' && userPosition && allPogemon.length > 0) {
-            spawnNearby(userPosition, allPogemon);
-        }
-    }, [status, userPosition, allPogemon, spawnNearby]);
-
+    }, [userPosition, allPogemon]);
+    
+    // Distance calculation interval
     useEffect(() => {
         if (!userPosition) return;
         const interval = setInterval(() => {
-            setNearbyPokemons(currentNearby =>
-                currentNearby.map(p => ({
-                    ...p,
-                    distance: calculateDistance(userPosition.latitude, userPosition.longitude, p.lat, p.lon).toFixed(0)
-                }))
-            );
+            setNearbyPokemons(current => current.map(p => ({
+                ...p,
+                distance: calculateDistance(userPosition.latitude, userPosition.longitude, p.lat, p.lon).toFixed(0)
+            })));
         }, 2000);
         return () => clearInterval(interval);
     }, [userPosition]);
-
-    const init = () => {
-        if (!navigator.geolocation) {
-            setStatus('unsupported');
-            return;
-        }
-        setStatus('locating');
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                setUserPosition(position.coords);
-                setStatus('ready');
-            },
-            (error) => {
-                console.error("Geolocation error:", error);
-                if (error.code === 1) { // PERMISSION_DENIED
-                    setStatus('needs_permission');
-                } else {
-                    setStatus('error');
-                }
-            },
-            { enableHighAccuracy: true }
-        );
-    };
-
-    useEffect(() => {
-        init();
-    }, []);
     
-    if (status === 'initializing' || status === 'locating') {
-        return <div className="loading-screen"><h1>Starting up...</h1><p>Getting your location to find nearby Pogemon.</p></div>;
+    const value = { gameStatus, nearbyPokemons, activePogemon, setActivePogemon, refreshGeo, userPosition };
+
+    return <GameContext.Provider value={value}>{children}</GameContext.Provider>;
+}
+
+// --- UI Components ---
+
+function App() {
+    const { gameStatus, refreshGeo } = useGame();
+
+    if (gameStatus === 'initializing' || gameStatus === 'locating') {
+        return <div className="loading-screen"><h1>Starting up...</h1><p>Finding your location and nearby Pogemon.</p></div>;
     }
-    
-    if (status === 'generating') {
+    if (gameStatus === 'generating') {
         return <div className="loading-screen"><h1>Generating World...</h1><p>Creating new Pogemon for you to discover!</p></div>;
     }
-
-    if (status === 'needs_permission') {
+    if (gameStatus === 'needs_permission') {
         return (
             <div className="permission-screen">
                 <h1>Location Access Required</h1>
-                <p>We need your location to show you nearby Pogemon. Please grant permission and refresh the page.</p>
-                 <button onClick={() => window.location.reload()}>Refresh</button>
+                <p>We need your location to show you nearby Pogemon. Please grant permission and click refresh.</p>
+                <button onClick={() => window.location.reload()}>Refresh</button>
             </div>
         );
     }
-    
-    if (status === 'error' || status === 'unsupported') {
-        return <div className="loading-screen"><h1>Error</h1><p>Could not get location. This app requires GPS.</p></div>;
+    if (gameStatus === 'error') {
+        return <div className="loading-screen"><h1>Error</h1><p>Could not get location. This app requires GPS access.</p></div>;
     }
 
     return (
         <div className="app-container">
-            {activePogemon ? (
-                <CaptureView pogemon={activePogemon} onBack={() => setActivePogemon(null)} />
-            ) : (
-                <>
-                    <ARSceneWrapper nearbyPokemons={nearbyPokemons} />
-                    <div className="ui-overlay">
-                        <NearbyList pokemons={nearbyPokemons} onSelect={setActivePogemon} />
-                        <Minimap pokemons={nearbyPokemons} />
-                    </div>
-                </>
-            )}
+            <ARView />
+            <UIOverlay />
         </div>
     );
 }
 
-function ARSceneWrapper({ nearbyPokemons }) {
+function UIOverlay() {
+    const { nearbyPokemons, setActivePogemon, activePogemon } = useGame();
+    return (
+        <div className="ui-overlay">
+            <div className="ui-overlay-top">
+                {activePogemon ? (
+                    <button className="back-button" onClick={() => setActivePogemon(null)}>&larr; Back to Map</button>
+                ) : (
+                    <NearbyList pokemons={nearbyPokemons} onSelect={setActivePogemon} />
+                )}
+            </div>
+            <div className="ui-overlay-bottom">
+                 {activePogemon ? (
+                    <div className="pogemon-name-plate">
+                        <h2>{activePogemon.name}</h2>
+                        <p>{activePogemon.type} Type</p>
+                    </div>
+                 ) : (
+                    <Minimap pokemons={nearbyPokemons} onSelect={setActivePogemon} />
+                 )}
+            </div>
+        </div>
+    );
+}
+
+function ARView() {
+    const { nearbyPokemons, activePogemon } = useGame();
+
     return (
         <a-scene
             vr-mode-ui="enabled: false"
             arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
             renderer="antialias: true; alpha: true"
             className="ar-scene"
-            key={JSON.stringify(nearbyPokemons.map(p => p.id))}
+            key={activePogemon ? 'capture' : 'world'} // Force remount to simplify state
         >
-            <a-camera></a-camera>
-            {nearbyPokemons.map(p => (
-                <a-image
-                    key={p.id}
-                    src={p.imageUrl}
-                    scale="15 15 15"
-                    look-at="[gps-new-camera]"
-                    gps-new-entity-place={`latitude: ${p.lat}; longitude: ${p.lon}`}
-                ></a-image>
-            ))}
-        </a-scene>
-    );
-}
-
-function CaptureView({ pogemon, onBack }) {
-    return (
-        <div className="capture-view">
-            <button className="back-button" onClick={onBack}>&larr; Back to Map</button>
-             <a-scene
-                vr-mode-ui="enabled: false"
-                arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false;"
-                renderer="antialias: true; alpha: true"
-                className="ar-scene"
-            >
-                <a-camera></a-camera>
-                <a-image
-                    src={pogemon.imageUrl}
+            <a-camera gps-new-camera="gpsMinDistance: 5"></a-camera>
+            {activePogemon ? (
+                 <a-image
+                    src={activePogemon.imageUrl}
                     scale="2 2 2"
                     position="0 -0.5 -5"
                     look-at="[camera]"
                 ></a-image>
-            </a-scene>
-            <div className="pogemon-name-plate">
-                <h2>{pogemon.name}</h2>
-                <p>{pogemon.type} Type</p>
-            </div>
-        </div>
+            ) : (
+                nearbyPokemons.map(p => (
+                    <a-image
+                        key={p.id}
+                        src={p.imageUrl}
+                        scale="15 15 15"
+                        look-at="[gps-new-camera]"
+                        gps-new-entity-place={`latitude: ${p.lat}; longitude: ${p.lon}`}
+                    ></a-image>
+                ))
+            )}
+        </a-scene>
     );
 }
 
-
 function NearbyList({ pokemons, onSelect }) {
     if (pokemons.length === 0) {
-        return (
-            <div className="nearby-list">
-                <h2>Nearby</h2>
-                <p>No Pogemon nearby. Walking around might help!</p>
-            </div>
-        );
+        return <div className="nearby-list"><h2>Nearby</h2><p>No Pogemon nearby. Try walking around!</p></div>;
     }
     return (
         <div className="nearby-list">
@@ -299,7 +298,7 @@ function NearbyList({ pokemons, onSelect }) {
                     <img src={p.imageUrl} alt={p.name} />
                     <div className="pogemon-info">
                         <h3>{p.name}</h3>
-                        <p>{p.distance}m away - {p.type}</p>
+                        <p>{p.distance ? `${p.distance}m away` : 'Calculating...'} - {p.type}</p>
                     </div>
                 </div>
             ))}
@@ -307,48 +306,37 @@ function NearbyList({ pokemons, onSelect }) {
     );
 }
 
-
-function Minimap({ pokemons }) {
-    const MAP_SIZE = 120; // px
-    const MAX_DIST = 100; // meters, from spawn logic
+function Minimap({ pokemons, onSelect }) {
+    const MAP_SIZE = 120;
+    const MAX_DIST = SPAWN_RADIUS_MAX;
 
     return (
         <div className="minimap" style={{ width: MAP_SIZE, height: MAP_SIZE }}>
             <div className="player-dot"></div>
             <div className="north-indicator">N</div>
             {pokemons.map(p => {
-                if (typeof p.angle === 'undefined' || typeof p.spawnDistance === 'undefined') return null;
+                if (!p.spawn) return null;
 
-                const angleRad = p.angle * Math.PI / 180;
-                // use spawnDistance which is consistent, not the live distance
-                const r = (p.spawnDistance / MAX_DIST) * (MAP_SIZE / 2); 
-                
-                // x and y from center, with North being up
+                const angleRad = p.spawn.angle * Math.PI / 180;
+                const r = (p.spawn.distance / MAX_DIST) * (MAP_SIZE / 2); 
                 const x = r * Math.sin(angleRad);
                 const y = -r * Math.cos(angleRad);
-
                 const style = {
                     position: 'absolute',
                     top: `calc(50% + ${y}px)`,
                     left: `calc(50% + ${x}px)`,
                     transform: 'translate(-50%, -50%)',
                 };
-
-                return (
-                    <img
-                        key={p.id}
-                        src={p.imageUrl}
-                        alt={p.name}
-                        className="pogemon-dot"
-                        style={style}
-                        onClick={() => {/* could maybe center on this pogemon or something */}}
-                    />
-                );
+                return <img key={p.id} src={p.imageUrl} alt={p.name} className="pogemon-dot" style={style} onClick={() => onSelect(p)} />;
             })}
         </div>
     );
 }
 
-
+// --- App Entry Point ---
 const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<App />);
+root.render(
+    <GameProvider>
+        <App />
+    </GameProvider>
+);
